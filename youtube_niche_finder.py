@@ -61,7 +61,7 @@ if topic:
 
     # Nút tải thêm video
     if st.button("🔄 Tải thêm video YouTube"):
-        st.experimental_rerun()
+        st.rerun()
 
     # Export CSV
     st.download_button(
