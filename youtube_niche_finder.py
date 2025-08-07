@@ -8,12 +8,13 @@ from pytrends.request import TrendReq
 import matplotlib.pyplot as plt
 import json
 
+# Cấu hình Streamlit
 st.set_page_config(page_title="YouTube Niche Finder", layout="wide")
 
-st.title("🔍 YouTube Niche Finder (Advanced)")
-st.markdown("Tìm kiếm từ khóa YouTube đang tăng trưởng dựa trên chủ đề hoặc xu hướng theo từng khu vực.")
+st.title("🔍 YouTube Niche Finder (Advanced + Load More)")
+st.markdown("Khám phá từ khóa YouTube đang tăng trưởng theo chủ đề hoặc xu hướng quốc tế.")
 
-# --- FUNCTION: Get YouTube keyword suggestions
+# --- Hàm lấy gợi ý từ khóa YouTube
 @st.cache_data
 def get_keyword_suggestions(query):
     url = f"http://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q={quote(query)}"
@@ -24,7 +25,7 @@ def get_keyword_suggestions(query):
     else:
         return []
 
-# --- FUNCTION: Get Google Trends by region
+# --- Hàm lấy từ khóa trending từ Google Trends
 @st.cache_data
 def get_trending_today(region_code='united_states'):
     pytrends = TrendReq(hl='en-US', tz=360)
@@ -34,7 +35,7 @@ def get_trending_today(region_code='united_states'):
     except Exception:
         return []
 
-# --- FUNCTION: Scrape YouTube results
+# --- Hàm lấy video từ YouTube
 def get_video_data(keyword, max_results=5):
     search_url = f"https://www.youtube.com/results?search_query={quote(keyword)}"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -76,7 +77,7 @@ def get_video_data(keyword, max_results=5):
             break
     return results
 
-# --- FUNCTION: Convert view text to number
+# --- Hàm chuyển đổi lượt xem sang số
 def parse_views(view_text):
     try:
         if "N/A" in view_text:
@@ -91,7 +92,7 @@ def parse_views(view_text):
     except:
         return 0
 
-# --- UI: Select input method
+# --- Lựa chọn nguồn từ khóa
 option = st.radio("📥 Chọn nguồn từ khóa", ["Nhập chủ đề thủ công", "Từ Google Trends"])
 
 if option == "Nhập chủ đề thủ công":
@@ -112,41 +113,55 @@ else:
     topic = f"Google Trends - {region}"
     suggestions = trending_keywords[:10]
 
-# --- Advanced options
+# --- Tùy chọn nâng cao
 if suggestions:
-    st.subheader("⚙️ Tuỳ chọn nâng cao")
+    st.subheader("⚙️ Tùy chọn nâng cao")
     num_keywords = st.slider("Số lượng từ khóa muốn phân tích", min_value=1, max_value=len(suggestions), value=min(5, len(suggestions)))
-    num_videos = st.slider("Số video tối đa mỗi từ khóa", min_value=1, max_value=20, value=10)
+    max_videos_per_kw = st.slider("Số video tối đa mỗi từ khóa", min_value=1, max_value=20, value=10)
 
-    if num_keywords * num_videos > 100:
-        st.warning("⚠️ Bạn đang tải rất nhiều dữ liệu. Điều này có thể khiến ứng dụng chạy chậm.")
+    if num_keywords * max_videos_per_kw > 100:
+        st.warning("⚠️ Tải nhiều dữ liệu có thể gây chậm ứng dụng.")
 
     st.subheader("📌 Từ khóa được đề xuất")
     st.write(", ".join(suggestions[:num_keywords]))
 
     st.subheader("📺 Phân tích các video liên quan")
     all_results = []
-    for kw in suggestions[:num_keywords]:
-        with st.spinner(f"🔎 Đang tìm video cho từ khóa: {kw}"):
-            videos = get_video_data(kw, max_results=num_videos)
-        all_results.extend(videos)
 
+    for kw in suggestions[:num_keywords]:
+        key_kw = f"video_count_{kw}"
+        if key_kw not in st.session_state:
+            st.session_state[key_kw] = min(5, max_videos_per_kw)
+
+        st.markdown(f"### 🔑 Từ khóa: `{kw}`")
+
+        with st.spinner(f"🔎 Đang tìm {st.session_state[key_kw]} video..."):
+            videos = get_video_data(kw, max_results=st.session_state[key_kw])
+
+        all_results.extend(videos)
+        df_kw = pd.DataFrame(videos)
+
+        if not df_kw.empty:
+            st.dataframe(df_kw, use_container_width=True)
+
+        if st.session_state[key_kw] < max_videos_per_kw:
+            if st.button(f"➕ Tải thêm video cho '{kw}'", key=f"load_more_{kw}"):
+                st.session_state[key_kw] += 5
+                st.experimental_rerun()
+
+    # Xử lý và biểu đồ
     if all_results:
         df = pd.DataFrame(all_results)
         df["ParsedViews"] = df["Views"].apply(parse_views)
         df["Published"] = df["Published"].fillna("N/A")
 
-        st.dataframe(df.drop(columns=["ParsedViews"]), use_container_width=True)
-
-        # --- Chart
         st.subheader("📊 Biểu đồ lượt xem trung bình theo từ khóa")
         chart_df = df.groupby("Keyword")["ParsedViews"].mean().sort_values(ascending=False)
         st.bar_chart(chart_df)
 
-        # --- Download CSV
         csv = df.drop(columns=["ParsedViews"]).to_csv(index=False).encode("utf-8")
         st.download_button("⬇️ Tải kết quả CSV", data=csv, file_name="youtube_niche_results.csv", mime="text/csv")
     else:
         st.info("⚠️ Không tìm thấy video phù hợp.")
 else:
-    st.warning("❗ Không tìm thấy từ khóa nào.")
+    st.warning("❗ Không có từ khóa.")
