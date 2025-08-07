@@ -3,6 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import os
+import googleapiclient.discovery
 
 st.set_page_config(page_title="YouTube Niche Finder", layout="wide")
 
