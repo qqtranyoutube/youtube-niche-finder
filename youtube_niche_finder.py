@@ -8,8 +8,8 @@ from googleapiclient.discovery import build
 from pytrends.request import TrendReq
 
 # --- API KEY ---
-st.write("Your API Key is:", st.secrets["YOUTUBE_API_KEY"])
-# --- api_key = st.secrets["YOUTUBE_API_KEY"]  # Ensure this is set in .streamlit/secrets.toml --
+
+api_key = st.secrets["YOUTUBE_API_KEY"]  # Ensure this is set in .streamlit/secrets.toml
 youtube = build("youtube", "v3", developerKey=api_key)
 
 # --- PAGE CONFIG ---
