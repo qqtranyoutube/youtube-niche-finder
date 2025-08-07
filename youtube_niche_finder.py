@@ -1,5 +1,3 @@
-# youtube_niche_finder_advanced.py
-
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
@@ -114,16 +112,23 @@ else:
     topic = f"Google Trends - {region}"
     suggestions = trending_keywords[:10]
 
-# --- Main logic
+# --- Advanced options
 if suggestions:
+    st.subheader("⚙️ Tuỳ chọn nâng cao")
+    num_keywords = st.slider("Số lượng từ khóa muốn phân tích", min_value=1, max_value=len(suggestions), value=min(5, len(suggestions)))
+    num_videos = st.slider("Số video tối đa mỗi từ khóa", min_value=1, max_value=20, value=10)
+
+    if num_keywords * num_videos > 100:
+        st.warning("⚠️ Bạn đang tải rất nhiều dữ liệu. Điều này có thể khiến ứng dụng chạy chậm.")
+
     st.subheader("📌 Từ khóa được đề xuất")
-    st.write(", ".join(suggestions))
+    st.write(", ".join(suggestions[:num_keywords]))
 
     st.subheader("📺 Phân tích các video liên quan")
     all_results = []
-    for kw in suggestions[:5]:
+    for kw in suggestions[:num_keywords]:
         with st.spinner(f"🔎 Đang tìm video cho từ khóa: {kw}"):
-            videos = get_video_data(kw)
+            videos = get_video_data(kw, max_results=num_videos)
         all_results.extend(videos)
 
     if all_results:
