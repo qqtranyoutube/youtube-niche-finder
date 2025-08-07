@@ -2,94 +2,106 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
+import plotly.express as px
+from io import BytesIO
 from googleapiclient.discovery import build
-import io
+from pytrends.request import TrendReq
 
-# === Cấu hình trang ===
+# --- API KEY ---
+api_key = st.secrets["YOUTUBE_API_KEY"]  # Ensure this is set in .streamlit/secrets.toml
+youtube = build("youtube", "v3", developerKey=api_key)
+
+# --- PAGE CONFIG ---
 st.set_page_config(page_title="YouTube Keyword Analyzer PRO", layout="wide")
 st.title("🚀 YouTube Keyword Analyzer PRO")
 st.write("Phân tích từ khóa & video YouTube đang tăng trưởng mạnh mẽ")
 
-# === Nhập API Key ===
-api_key = st.secrets["YOUTUBE_API_KEY"]
-youtube = build("youtube", "v3", developerKey=api_key)
+# --- INPUT ---
+topic = st.text_input("📥 Nhập chủ đề (ví dụ: fitness, ai, sleep)", "")
 
-# === Nhập chủ đề ===
-topic = st.text_input("🔎 Nhập chủ đề (ví dụ: ai, fitness, crypto)", value="")
-
-# === Phân tích từ khóa và video ===
-df = pd.DataFrame()
-if topic:
-    st.subheader("📌 Gợi ý từ khóa liên quan")
+# --- COLLECT SUGGESTIONS ---
+def get_suggestions(topic):
     suggestion_url = f"https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q={topic}"
     headers = {"User-Agent": "Mozilla/5.0"}
-    response = requests.get(suggestion_url, headers=headers)
-    suggestions = response.json()[1]
-    st.write("➡️", ", ".join(suggestions))
+    res = requests.get(suggestion_url, headers=headers)
+    return res.json()[1]
 
-    st.subheader("📄 Phân tích video theo từ khóa")
-    all_results = []
+# --- CRAWL VIDEO DATA ---
+def fetch_video_info(keyword):
+    url = f"https://www.youtube.com/results?search_query={keyword}"
+    soup = BeautifulSoup(requests.get(url).text, "html.parser")
+    results = []
+    for video in soup.select("#video-title")[:3]:
+        title = video.get("title")
+        link = "https://www.youtube.com" + video.get("href")
+        results.append({"Keyword": keyword, "Title": title, "Link": link})
+    return results
 
-    for keyword in suggestions[:5]:
-        search_response = youtube.search().list(
-            q=keyword,
-            part="snippet",
-            maxResults=5,
-            type="video",
-            order="viewCount"
-        ).execute()
+# --- GOOGLE TRENDS PYTRENDS ---
+def get_trending_keywords_pytrends():
+    pytrends = TrendReq(hl='en-US', tz=360)
+    pytrends.build_payload(["youtube"], cat=0, timeframe='now 7-d', geo='', gprop='youtube')
+    related = pytrends.related_queries()
+    if "youtube" in related and related["youtube"]["rising"] is not None:
+        return list(related["youtube"]["rising"].head(10)['query'])
+    return []
 
-        for item in search_response["items"]:
-            video_id = item["id"]["videoId"]
-            title = item["snippet"]["title"]
-            published = item["snippet"]["publishedAt"][:10]
-            video_url = f"https://www.youtube.com/watch?v={video_id}"
+# --- YOUTUBE TRENDING ---
+def get_youtube_trending_videos(regionCode="US"):
+    trending = youtube.videos().list(
+        part="snippet",
+        chart="mostPopular",
+        maxResults=10,
+        regionCode=regionCode
+    ).execute()
+    keywords = []
+    for item in trending.get("items", []):
+        title = item["snippet"]["title"]
+        keywords.append(title)
+    return keywords
 
-            video_response = youtube.videos().list(
-                part="statistics",
-                id=video_id
-            ).execute()
+# --- PROCESS ---
+all_keywords = []
+if topic:
+    all_keywords += get_suggestions(topic)
 
-            stats = video_response["items"][0]["statistics"]
-            views = stats.get("viewCount", "0")
+if st.checkbox("📈 Tự động lấy từ khóa trending YouTube", value=True):
+    all_keywords += get_youtube_trending_videos()
 
-            all_results.append({
-                "Keyword": keyword,
-                "Title": title,
-                "Views": f"{int(views):,} views",
-                "Published": published,
-                "Link": f"https://www.youtube.com/watch?v={video_id}"
-            })
+if st.checkbox("📊 Lấy từ khóa rising từ Google Trends", value=True):
+    all_keywords += get_trending_keywords_pytrends()
 
-    df = pd.DataFrame(all_results)
-    st.dataframe(df)
+# --- REMOVE DUPLICATES ---
+all_keywords = list(dict.fromkeys(all_keywords))
+st.write(f"🔑 Tổng số từ khóa thu thập được: {len(all_keywords)}")
+st.write(all_keywords)
 
-    # === 📥 Xuất Excel, CSV ===
-    buffer = io.BytesIO()
-    df.to_excel(buffer, index=False, engine='openpyxl')
-    st.download_button("📥 Tải xuống Excel", data=buffer.getvalue(), file_name="youtube_keywords.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    st.download_button("📥 Tải xuống CSV", data=df.to_csv(index=False), file_name="youtube_keywords.csv", mime="text/csv")
+# --- VIDEO DATA ---
+video_data = []
+for kw in all_keywords[:10]:
+    video_data.extend(fetch_video_info(kw))
 
-    # === 📊 Biểu đồ thống kê ===
-    st.subheader("📈 Thống kê nhanh")
-    chart_data = df.copy()
-    chart_data["Views"] = chart_data["Views"].str.replace("views", "").str.replace(",", "").str.strip()
-    chart_data["Views"] = pd.to_numeric(chart_data["Views"], errors="coerce")
-    chart_data = chart_data.dropna(subset=["Views"])
-    chart_data = chart_data.sort_values(by="Views", ascending=False)
-    st.bar_chart(chart_data[["Title", "Views"]].set_index("Title"))
+# --- FILTER UI ---
+st.subheader("🔍 Bộ lọc nâng cao")
+kw_filter = st.multiselect("Lọc theo keyword", options=sorted(set([v['Keyword'] for v in video_data])))
+if kw_filter:
+    video_data = [v for v in video_data if v['Keyword'] in kw_filter]
 
-    # === 🔍 Bộ lọc nâng cao ===
-    st.subheader("🔍 Lọc nâng cao")
-    selected_keyword = st.selectbox("Chọn keyword", options=["Tất cả"] + sorted(df["Keyword"].unique().tolist()))
-    if selected_keyword != "Tất cả":
-        df_filtered = df[df["Keyword"] == selected_keyword]
-    else:
-        df_filtered = df
+df = pd.DataFrame(video_data)
+st.dataframe(df)
 
-    st.dataframe(df_filtered)
+# --- BIỂU ĐỒ ---
+if not df.empty:
+    fig = px.bar(df, x="Keyword", title="Số lượng video theo keyword")
+    st.plotly_chart(fig, use_container_width=True)
 
-    # === 📤 Xuất HTML ===
-    st.subheader("🌐 Tải xuống HTML")
-    html_data = df_filtered.to_html(index=False, escape=False)
-    st.download_button("📥 Tải xuống HTML", data=html_data, file_name="youtube_keywords.html", mime="text/html")
+# --- DOWNLOAD ---
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.download_button("📥 Tải CSV", data=df.to_csv(index=False), file_name="youtube_keywords.csv", mime="text/csv")
+with col2:
+    output = BytesIO()
+    df.to_excel(output, index=False, engine='openpyxl')
+    st.download_button("📥 Tải Excel", data=output.getvalue(), file_name="youtube_keywords.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+with col3:
+    st.download_button("🌐 Tải HTML", data=df.to_html(), file_name="youtube_keywords.html", mime="text/html")
