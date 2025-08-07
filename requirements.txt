@@ -4,3 +4,7 @@ beautifulsoup4
 pandas
 pytrends
 matplotlib
+google-api-python-client
+pandas
+requests
+openpyxl
