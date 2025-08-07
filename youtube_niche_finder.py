@@ -6,9 +6,9 @@ from pytrends.request import TrendReq
 from io import BytesIO
 
 # === SETUP ===
-st.set_page_config(page_title="YouTube Niche Finder (Pro)", layout="wide")
-st.title("🔍 YouTube Niche Finder (Pro Edition)")
-st.write("Khám phá từ khóa YouTube đang tăng trưởng theo chủ đề hoặc xu hướng quốc tế.")
+st.set_page_config(page_title="YouTube Niche Finder (V3)", layout="wide")
+st.title("🔍 YouTube Niche Finder (V3 - No API Key Needed)")
+st.write("Khám phá từ khóa YouTube đang tăng trưởng theo chủ đề hoặc xu hướng quốc gia.")
 
 # === CHỌN NGUỒN TỪ KHÓA ===
 source = st.radio("🧭 Chọn nguồn từ khóa", ["Nhập chủ đề thủ công", "Từ Google Trends"], index=0)
@@ -20,7 +20,7 @@ keywords = []
 if source == "Nhập chủ đề thủ công":
     topic = st.text_input("💕 Nhập chủ đề (ví dụ: ai, fitness, crypto)", value="")
     if topic:
-        st.subheader("📌 Gợi ý từ khóa liên quan")
+        st.subheader("📌 Gợi ý từ khóa liên quan (Autocomplete)")
         suggestion_url = f"https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q={topic}"
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(suggestion_url, headers=headers)
@@ -29,30 +29,36 @@ if source == "Nhập chủ đề thủ công":
         st.write(", ".join(suggestions))
         keywords = suggestions[:5]
 
-# === CHẾ ĐỘ 2: GOOGLE TRENDS ===
+# === CHẾ ĐỘ 2: GOOGLE TRENDS (related_queries) ===
 elif source == "Từ Google Trends":
-    st.subheader("🌍 Chọn khu vực để lấy xu hướng")
-    regions = {
-        "United States": "united_states",
-        "Vietnam": "vietnam",
-        "Japan": "japan",
-        "United Kingdom": "united_kingdom",
-        "India": "india",
-        "Germany": "germany",
-        "South Korea": "south_korea",
+    st.subheader("🌍 Chọn quốc gia & chủ đề để lấy xu hướng")
+    countries = {
+        "United States": "US",
+        "Vietnam": "VN",
+        "Japan": "JP",
+        "United Kingdom": "GB",
+        "India": "IN",
+        "Germany": "DE",
+        "South Korea": "KR",
     }
-    region_name = st.selectbox("🌐 Quốc gia", list(regions.keys()))
-    region_code = regions[region_name]
+    geo_code = countries[st.selectbox("🌐 Quốc gia", list(countries.keys()))]
 
-    st.info(f"📈 Đang lấy từ khóa trending tại 🇺🇸 {region_name}...")
+    topics = ["technology", "fitness", "ai", "music", "crypto", "education", "fashion", "gaming"]
+    selected_topic = st.selectbox("🧠 Chọn chủ đề", topics)
+
+    st.info(f"📈 Đang lấy từ khóa tăng trưởng cho chủ đề **{selected_topic}** tại **{geo_code}**...")
+
     try:
         pytrends = TrendReq(hl='en-US', tz=360)
-        trending_df = pytrends.trending_searches(pn=region_code)
-        if trending_df.empty:
-            st.warning("❗ Không có từ khóa.")
+        pytrends.build_payload([selected_topic], cat=0, timeframe='now 7-d', geo=geo_code)
+        related = pytrends.related_queries()
+        top_keywords = related[selected_topic]["top"]
+
+        if top_keywords is None or top_keywords.empty:
+            st.warning("❗ Không có từ khóa liên quan.")
         else:
-            keywords = trending_df[0].tolist()[:5]
-            st.success("✅ Từ khóa trending:")
+            keywords = top_keywords["query"].tolist()[:5]
+            st.success("✅ Từ khóa đang tăng trưởng:")
             st.write(", ".join(keywords))
     except Exception as e:
         st.error(f"🚫 Lỗi khi lấy dữ liệu từ Google Trends: {e}")
