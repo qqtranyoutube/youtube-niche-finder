@@ -4,6 +4,9 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import os
 import googleapiclient.discovery
+import streamlit as st
+
+api_key = st.secrets["AIzaSyDz_oDmVpRY1T1W-dizavhpQqaIWwdMVrg"]
 
 st.set_page_config(page_title="YouTube Niche Finder", layout="wide")
 
