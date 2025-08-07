@@ -11,7 +11,7 @@ st.title("🔍 YouTube Keyword Analyzer PRO")
 st.write("Phân tích từ khóa & video YouTube đang tăng trưởng mạnh mẽ 🚀")
 
 # ==== API KEY ====
-api_key = st.secrets["YOUTUBE_API_KEY"]  # Add this to .streamlit/secrets.toml
+api_key = st.secrets["AIzaSyDz_oDmVpRY1T1W-dizavhpQqaIWwdMVrg"]  # Add this to .streamlit/secrets.toml
 youtube = build("youtube", "v3", developerKey=api_key)
 
 # ==== INPUT ====
