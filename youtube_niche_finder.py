@@ -90,6 +90,9 @@ st.dataframe(df, use_container_width=True)
 
 # --- DOWNLOAD ---
 buffer = BytesIO()
+df.to_excel(buffer, index=False)
+buffer.seek(0)
+
 st.download_button("📥 Tải CSV", data=df.to_csv(index=False), file_name="keywords.csv", mime="text/csv")
-st.download_button("📥 Tải Excel", data=df.to_excel(buffer, index=False), file_name="keywords.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+st.download_button("📥 Tải Excel", data=buffer, file_name="keywords.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 st.download_button("🌐 Tải HTML", data=df.to_html(index=False), file_name="keywords.html", mime="text/html")
