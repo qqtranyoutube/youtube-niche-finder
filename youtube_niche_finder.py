@@ -5,7 +5,6 @@ import requests
 from io import BytesIO
 from PIL import Image
 import base64
-from youtube_transcript_api import YouTubeTranscriptApi
 import plotly.express as px
 import matplotlib.pyplot as plt
 from io import BytesIO
