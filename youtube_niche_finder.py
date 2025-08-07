@@ -1,4 +1,4 @@
-# youtube_niche_finder.py
+# youtube_niche_finder_advanced.py
 
 import streamlit as st
 import requests
@@ -12,10 +12,10 @@ import json
 
 st.set_page_config(page_title="YouTube Niche Finder", layout="wide")
 
-st.title("🔍 YouTube Niche Finder (MVP)")
-st.markdown("Khám phá các từ khóa YouTube đang tăng trưởng mạnh – từ chủ đề bạn nhập hoặc từ Google Trends.")
+st.title("🔍 YouTube Niche Finder (Advanced)")
+st.markdown("Tìm kiếm từ khóa YouTube đang tăng trưởng dựa trên chủ đề hoặc xu hướng theo từng khu vực.")
 
-# --- FUNCTION: Get Google Suggest (YouTube)
+# --- FUNCTION: Get YouTube keyword suggestions
 @st.cache_data
 def get_keyword_suggestions(query):
     url = f"http://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q={quote(query)}"
@@ -26,17 +26,17 @@ def get_keyword_suggestions(query):
     else:
         return []
 
-# --- FUNCTION: Get trending keywords today from Google Trends
+# --- FUNCTION: Get Google Trends by region
 @st.cache_data
-def get_trending_today(country='vietnam'):
-    pytrends = TrendReq(hl='vi-VN', tz=360)
+def get_trending_today(region_code='united_states'):
+    pytrends = TrendReq(hl='en-US', tz=360)
     try:
-        df = pytrends.trending_searches(pn=country)
+        df = pytrends.trending_searches(pn=region_code)
         return df[0].tolist()
-    except Exception as e:
+    except Exception:
         return []
 
-# --- FUNCTION: Scrape YouTube search results (basic)
+# --- FUNCTION: Scrape YouTube results
 def get_video_data(keyword, max_results=5):
     search_url = f"https://www.youtube.com/results?search_query={quote(keyword)}"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -60,7 +60,8 @@ def get_video_data(keyword, max_results=5):
     results = []
     for item in items:
         video = item.get("videoRenderer")
-        if not video: continue
+        if not video:
+            continue
         title = video['title']['runs'][0]['text']
         views_text = video.get("viewCountText", {}).get("simpleText", "0 views")
         published = video.get("publishedTimeText", {}).get("simpleText", "N/A")
@@ -77,7 +78,7 @@ def get_video_data(keyword, max_results=5):
             break
     return results
 
-# --- FUNCTION: Parse view text to number
+# --- FUNCTION: Convert view text to number
 def parse_views(view_text):
     try:
         if "N/A" in view_text:
@@ -92,27 +93,36 @@ def parse_views(view_text):
     except:
         return 0
 
-# --- UI CHOICE: Input source
-option = st.radio("📥 Chọn nguồn từ khóa", ["Nhập thủ công", "Từ Google Trends (VN)"])
+# --- UI: Select input method
+option = st.radio("📥 Chọn nguồn từ khóa", ["Nhập chủ đề thủ công", "Từ Google Trends"])
 
-if option == "Nhập thủ công":
-    topic = st.text_input("🎯 Nhập chủ đề (ví dụ: ai, fitness, crypto)", value="ai")
+if option == "Nhập chủ đề thủ công":
+    topic = st.text_input("🎯 Nhập chủ đề (ví dụ: ai, crypto, fitness)", value="ai")
     suggestions = get_keyword_suggestions(topic)
 else:
-    st.info("📈 Lấy từ khóa thịnh hành hôm nay tại Việt Nam...")
-    trending_keywords = get_trending_today()
-    topic = "Google Trends"
+    region_map = {
+        "🇺🇸 United States": "united_states",
+        "🇬🇧 United Kingdom": "united_kingdom",
+        "🇪🇺 European Union": "europe",
+        "🇦🇺 Australia": "australia",
+        "🇻🇳 Vietnam": "vietnam"
+    }
+    region = st.selectbox("🌍 Chọn khu vực", list(region_map.keys()))
+    region_code = region_map[region]
+    st.info(f"📈 Lấy từ khóa đang trending tại {region}...")
+    trending_keywords = get_trending_today(region_code)
+    topic = f"Google Trends - {region}"
     suggestions = trending_keywords[:10]
 
-# --- MAIN LOGIC
+# --- Main logic
 if suggestions:
-    st.subheader("📌 Danh sách từ khóa liên quan")
+    st.subheader("📌 Từ khóa được đề xuất")
     st.write(", ".join(suggestions))
 
-    st.subheader("📈 Phân tích video theo từ khóa")
+    st.subheader("📺 Phân tích các video liên quan")
     all_results = []
-    for kw in suggestions[:5]:  # lấy 5 từ khóa đầu tiên để phân tích
-        with st.spinner(f"🔎 Đang phân tích: {kw}..."):
+    for kw in suggestions[:5]:
+        with st.spinner(f"🔎 Đang tìm video cho từ khóa: {kw}"):
             videos = get_video_data(kw)
         all_results.extend(videos)
 
@@ -132,6 +142,6 @@ if suggestions:
         csv = df.drop(columns=["ParsedViews"]).to_csv(index=False).encode("utf-8")
         st.download_button("⬇️ Tải kết quả CSV", data=csv, file_name="youtube_niche_results.csv", mime="text/csv")
     else:
-        st.info("⚠️ Không có dữ liệu video phù hợp.")
+        st.info("⚠️ Không tìm thấy video phù hợp.")
 else:
-    st.warning("❗ Không tìm thấy từ khóa gợi ý.")
+    st.warning("❗ Không tìm thấy từ khóa nào.")
