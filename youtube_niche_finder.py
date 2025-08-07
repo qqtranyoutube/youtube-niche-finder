@@ -1,90 +1,70 @@
-
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
-from datetime import datetime
-from urllib.parse import quote
+import os
 
 st.set_page_config(page_title="YouTube Niche Finder", layout="wide")
 
 st.title("🔍 YouTube Niche Finder (MVP)")
-st.markdown("Nhập chủ đề gốc và tìm các keyword đang tăng trưởng trên YouTube.")
+st.write("Nhập chủ đề gốc và tìm các keyword đang tăng trưởng trên YouTube.")
 
-# Bước 1: Nhập từ khóa gốc
-topic = st.text_input("🎯 Nhập chủ đề (ví dụ: ai, fitness, crypto)", value="ai")
+topic = st.text_input("💕 Nhập chủ đề (ví dụ: ai, fitness, crypto)", value="")
 
-# Bước 2: Lấy gợi ý từ khóa từ YouTube Suggest (qua Google Suggest API)
-@st.cache_data
-def get_keyword_suggestions(query):
-    url = f"http://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q={quote(query)}"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    r = requests.get(url, headers=headers)
-    if r.status_code == 200:
-        return r.json()[1]
-    else:
-        return []
-
-# Bước 3: Lấy thông tin video từ kết quả tìm kiếm YouTube
-def get_video_data(keyword, max_results=5):
-    search_url = f"https://www.youtube.com/results?search_query={quote(keyword)}"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    r = requests.get(search_url, headers=headers)
-    soup = BeautifulSoup(r.text, "html.parser")
-    scripts = soup.find_all("script")
-    for script in scripts:
-        if 'var ytInitialData' in script.text:
-            raw_json = script.text.strip().split(' = ', 1)[1].rsplit(";", 1)[0]
-            break
-    else:
-        return []
-
-    import json
-    data = json.loads(raw_json)
-    try:
-        items = data['contents']['twoColumnSearchResultsRenderer']['primaryContents']['sectionListRenderer']['contents'][0]['itemSectionRenderer']['contents']
-    except:
-        return []
-
-    results = []
-    for item in items:
-        video = item.get("videoRenderer")
-        if not video: continue
-        title = video['title']['runs'][0]['text']
-        views_text = video.get("viewCountText", {}).get("simpleText", "0 views")
-        published = video.get("publishedTimeText", {}).get("simpleText", "N/A")
-        video_id = video["videoId"]
-        link = f"https://www.youtube.com/watch?v={video_id}"
-        results.append({
-            "Keyword": keyword,
-            "Title": title,
-            "Views": views_text,
-            "Published": published,
-            "Link": link
-        })
-        if len(results) >= max_results:
-            break
-    return results
-
-# Main logic
+# --- PHẦN GỢI Ý KEYWORD ---
 if topic:
     st.subheader("📌 Gợi ý từ khóa liên quan")
-    suggestions = get_keyword_suggestions(topic)
-    if suggestions:
-        st.write(", ".join(suggestions[:10]))
-    else:
-        st.error("Không lấy được từ khóa gợi ý.")
+    suggestion_url = f"https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q={topic}"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    response = requests.get(suggestion_url, headers=headers)
+    suggestions = response.json()[1]
+    st.write(", ".join(suggestions))
 
-    st.subheader("📈 Phân tích video theo từ khóa")
-    all_results = []
-    for kw in suggestions[:5]:
-        videos = get_video_data(kw)
-        all_results.extend(videos)
+    # --- PHÂN TÍCH VIDEO ---
+    st.subheader("📈 Phân tích video theo từ khóa ⇔")
+    results = []
+    for keyword in suggestions[:5]:
+        url = f"https://www.youtube.com/results?search_query={keyword}"
+        soup = BeautifulSoup(requests.get(url, headers=headers).text, "html.parser")
+        for video in soup.select("a#video-title")[:2]:
+            title = video['title']
+            link = "https://www.youtube.com" + video['href']
+            views = "?"
+            published = "?"
+            results.append({"Keyword": keyword, "Title": title, "Views": views, "Published": published, "Link": link})
 
-    if all_results:
-        df = pd.DataFrame(all_results)
-        st.dataframe(df, use_container_width=True)
-        csv = df.to_csv(index=False).encode("utf-8")
-        st.download_button("⬇️ Tải kết quả CSV", data=csv, file_name="youtube_niche_results.csv")
+    st.dataframe(pd.DataFrame(results))
+
+    # --- PHẦN 1: GỢI Ý VIDEO IDEA TỪ AI ---
+    st.subheader("🤖 Gợi ý ý tưởng video với AI (OpenRouter)")
+    openrouter_api_key = st.secrets.get("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", "")
+
+    if openrouter_api_key:
+        prompt = f"Tôi muốn làm video YouTube về chủ đề '{topic}'. Hãy gợi ý 5 ý tưởng video hấp dẫn, sáng tạo và có tiềm năng viral."
+        headers = {
+            "Authorization": f"Bearer {openrouter_api_key}",
+            "HTTP-Referer": "https://youtube-niche-finder.streamlit.app",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "mistral",
+            "messages": [{"role": "user", "content": prompt}]
+        }
+        res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data)
+        ideas = res.json()["choices"][0]["message"]["content"]
+        st.markdown(ideas)
     else:
-        st.info("Không có dữ liệu video phù hợp.")
+        st.warning("Bạn cần cấu hình `OPENROUTER_API_KEY` trong Streamlit → Secrets để dùng AI.")
+
+    # --- PHẦN 2: GỢI Ý VIDEO IDEA TỪ CSV ---
+    st.subheader("📂 Gợi ý ý tưởng video có sẵn")
+    try:
+        df_ideas = pd.read_csv("video_ideas.csv")
+        matched = df_ideas[df_ideas["keyword"].str.contains(topic, case=False)]
+        if not matched.empty:
+            for i, idea in enumerate(matched["idea"].values):
+                st.write(f"{i+1}. {idea}")
+        else:
+            st.info("Không có ý tưởng phù hợp trong dữ liệu nội bộ.")
+    except:
+        st.info("Chưa có file `video_ideas.csv`. Tải file vào repo để dùng phần này.")
