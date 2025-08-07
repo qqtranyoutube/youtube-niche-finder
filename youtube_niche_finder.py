@@ -2,11 +2,10 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
-import os
 import googleapiclient.discovery
-import streamlit as st
 
-api_key = st.secrets["AIzaSyDz_oDmVpRY1T1W-dizavhpQqaIWwdMVrg"]
+# ✅ Lấy API key từ secrets
+youtube_api_key = st.secrets["youtube_api_key"]
 
 st.set_page_config(page_title="YouTube Niche Finder", layout="wide")
 
@@ -15,9 +14,6 @@ st.write("Nhập chủ đề gốc và tìm các keyword đang tăng trưởng t
 
 # Nhập chủ đề
 topic = st.text_input("💕 Nhập chủ đề (ví dụ: ai, fitness, crypto)", value="")
-
-# ✅ Lấy API key từ secrets (bảo mật)
-youtube_api_key = st.secrets["AIzaSyDz_oDmVpRY1T1W-dizavhpQqaIWwdMVrg"]
 
 # === PHẦN GỢI Ý KEYWORD ===
 if topic:
@@ -35,15 +31,13 @@ if topic:
         url = f"https://www.youtube.com/results?search_query={keyword}"
         soup = BeautifulSoup(requests.get(url, headers=headers).text, "html.parser")
         for video in soup.select("#video-title")[:2]:
-            title = video['title']
-            link = "https://www.youtube.com" + video['href']
-            views = "?"  # placeholder vì BeautifulSoup không lấy views được dễ
-            published = "?"
+            title = video.get('title', 'No title')
+            link = "https://www.youtube.com" + video.get('href', '')
             results.append({
                 "Keyword": keyword,
                 "Title": title,
-                "Views": views,
-                "Published": published,
+                "Views": "?",  # Placeholder
+                "Published": "?",
                 "Link": link
             })
     st.dataframe(pd.DataFrame(results))
