@@ -241,3 +241,37 @@ if st.button("🔎 Lấy dữ liệu RPM & Monetization"):
                             "channel": channel_title,
                             "monet_status": monet_status,
                             "stat_views": int(item.get("statistics", {}).get("viewCount", 0))
+                        }
+                else:
+                    info_map = {}
+
+                # 3) Combine into DataFrame
+                records = []
+                for d in data:
+                    vid = d["videoId"]
+                    info = info_map.get(vid, {})
+                    records.append({
+                        "Video ID": vid,
+                        "Title": info.get("title", vid),
+                        "Channel": info.get("channel", ""),
+                        "Views (period)": d["views"],
+                        "Estimated Revenue (USD)": d["estimatedRevenue"],
+                        "RPM (USD)": d["rpm"],
+                        "Monetization Info": info.get("monet_status", "Unknown")
+                    })
+
+                df = pd.DataFrame(records).sort_values(by="Views (period)", ascending=False)
+                st.success(f"Đã lấy dữ liệu cho {len(df)} videos.")
+                st.dataframe(df, use_container_width=True)
+
+                # Download buttons
+                st.download_button("📥 Tải CSV", df.to_csv(index=False).encode("utf-8"), file_name="youtube_rpm.csv", mime="text/csv")
+                st.download_button("📥 Tải Excel", df.to_excel(index=False, engine="openpyxl"), file_name="youtube_rpm.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            except HttpError as e:
+                try:
+                    err = json.loads(e.content.decode())
+                    st.error(f"API Error {e.resp.status}: {err.get('error', {}).get('message')}")
+                except Exception:
+                    st.error(f"HttpError: {e}")
+            except Exception as e:
+                st.error(f"Lỗi khi lấy dữ liệu: {e}")
