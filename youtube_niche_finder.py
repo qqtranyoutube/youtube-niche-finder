@@ -110,7 +110,41 @@ if use_google_trends and topic:
 # ---------------- DEDUPLICATE ----------------
 all_keywords = list(set(all_keywords))
 
-st.markdown(f"""
-🔑 **Tổng số từ khóa thu thập được: {len(all_keywords)}**
-```python
-{all_keywords}
+# Hiển thị số lượng và danh sách từ khóa
+st.markdown(f"🔑 **Tổng số từ khóa thu thập được: {len(all_keywords)}**")
+st.code(all_keywords, language="python")
+
+# ---------------- FILTER ----------------
+st.subheader("🔍 Bộ lọc nâng cao")
+selected = st.multiselect("Lọc theo keyword", options=sorted(all_keywords))
+filtered = selected if selected else all_keywords
+
+df = pd.DataFrame(filtered, columns=["Keyword"])
+st.dataframe(df, use_container_width=True)
+
+# ---------------- THUMBNAILS ----------------
+if trending_videos:
+    st.subheader("📺 Video Trending Phân Tích")
+    cols = st.columns(4)
+    for i, video in enumerate(trending_videos):
+        with cols[i % 4]:
+            st.image(video["thumbnail"], 
+                     caption=f"**{video['title']}**\n👁️ {video['views']:,} | 📺 {video['channel']}", 
+                     use_column_width=True)
+
+    # Biểu đồ
+    chart_df = pd.DataFrame(trending_videos).sort_values(by="views", ascending=False)
+    fig = px.bar(chart_df, x="title", y="views", color="channel", 
+                 title="🔎 Biểu đồ lượt xem các video trending")
+    fig.update_layout(xaxis_tickangle=-45, height=600)
+    st.plotly_chart(fig, use_container_width=True)
+
+# ---------------- DOWNLOAD ----------------
+buffer = BytesIO()
+df.to_excel(buffer, index=False)
+buffer.seek(0)
+
+st.download_button("📥 Tải CSV", data=df.to_csv(index=False), file_name="keywords.csv", mime="text/csv")
+st.download_button("📥 Tải Excel", data=buffer.getvalue(), file_name="keywords.xlsx", 
+                   mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+st.download_button("🌐 Tải HTML", data=df.to_html(index=False), file_name="keywords.html", mime="text/html")
